@@ -1,0 +1,103 @@
+version: "3.8"
+
+services:
+  db:
+    container_name: db
+    image: postgres:12-alpine
+    restart: on-failure
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    networks:
+      - webnet
+    expose:
+      - 5432
+    env_file: ./config/.env
+    environment:
+      POSTGRES_USER: 'postgres'
+      POSTGRES_PASSWORD: 'postgres'
+      POSTGRES_DB: 'dev_db'
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  frontend:
+    container_name: frontend
+    build:
+      target: development_build
+    networks:
+      - webnet
+      - nginx_network
+    volumes:
+      - ./fsa_frontend:/app
+      - /app/node_modules/
+    environment:
+      ENV: "dev"
+    expose:
+      - 3000
+    stdin_open: true
+    command: sh /runserver.sh
+
+  web: &web
+    container_name: web
+    env_file: ./config/.env
+    build:
+      target: development_build
+      args:
+        DJANGO_ENV: 'dev'
+    volumes:
+      - ./fsa_backend:/code
+      - ./config:/config
+      - django-media:/code/media
+    environment:
+      DJANGO_DEBUG: 1
+      DATABASE_URL: 'postgresql://postgres:postgres@db:5432/dev_db'
+      DATABASE_HOST: 'db'
+    depends_on:
+      - db
+    command: sh /runserver.sh
+
+  mailhog:
+    container_name: mailhog
+    image: mailhog/mailhog:latest
+    command: ["-smtp-bind-addr", "0.0.0.0:25"]
+    user: root
+    restart: on-failure
+    networks:
+      - webnet
+      - nginx_network
+    expose:
+      - 25
+      - 8025
+    healthcheck:
+      test: ["CMD", "echo", "|", "telnet", "127.0.0.1 25"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  nginx:
+    container_name: nginx
+    build:
+      target: development_build
+    ports:
+      - 8025:8025
+      - 3000:3000
+    depends_on:
+      - mailhog
+
+  pgadmin:
+    container_name: pgadmin
+    image: dpage/pgadmin4
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    networks:
+      - webnet
+    restart: unless-stopped
+
+volumes:
+  db-data:
+  django-media:

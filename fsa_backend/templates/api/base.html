@@ -1,0 +1,15 @@
+{% load swagger_extras %}
+
+{% if description %}
+<h2>{{ description }}</h2>
+{% endif %}
+
+{% fields_beautify title="Query fields" fields=query_fields %}
+
+{% fields_beautify title="Path fields" fields=path_fields %}
+
+{% fields_beautify title="Body fields" fields=body_fields %}
+
+{% return_fields %}
+
+{% url_query_example path=path_example query=query_example %}
